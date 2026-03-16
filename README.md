@@ -2,7 +2,7 @@
 
 # 🏔️ Sherpa
 
-**Explains your terminal errors in plain English. Fully local, no API key.**
+**Explains your terminal errors in plain English. Fully local, no API key, no internet after setup.**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -15,22 +15,26 @@
 ![Sherpa Demo](assets/demo.gif)
 
 ```
-$ python app.py
-TypeError: unsupported operand type(s) for +: 'int' and 'str'  [line 42]
+$ pip install rish
+ERROR: Could not find a version that satisfies the requirement rish
 
-$ sherpa
+$ python -m sherpa
 
 sherpa is thinking...
 
+Command: pip install rish
+
 ╭─ Why it failed ──────────────────────────────────────────────╮
-│ You're trying to add an integer and a string at line 42.     │
-│ Python requires both sides of + to be the same type —        │
-│ it won't auto-convert like JavaScript does.                  │
+│ The package 'rish' does not exist on PyPI. Pip searched all  │
+│ available distributions and found no match.                  │
 ╰──────────────────────────────────────────────────────────────╯
 ╭─ Fix ────────────────────────────────────────────────────────╮
-│ total + int(user_input)                                      │
+│ Check the package name spelling — did you mean 'rich'?       │
+│ pip install rich                                             │
 ╰──────────────────────────────────────────────────────────────╯
 ```
+
+---
 
 ## Install
 
@@ -38,40 +42,79 @@ sherpa is thinking...
 pip install sherpa-dev
 ```
 
-Or from source:
-
-```bash
-git clone https://github.com/RishiiGamer2201/sherpa
-cd sherpa
-pip install -e .
-```
+That's it. No compiler, no API key, no configuration. `pip install` only pulls in `click` and `rich` — two lightweight packages that install in seconds on any machine.
 
 ## First Run
 
 ```bash
-sherpa
+python -m sherpa
 ```
 
-On first run, Sherpa will prompt you to download a local AI model (~4GB). After that, **everything runs offline** — no internet, no API key, no external server. Ever.
+On first run, Sherpa does two things automatically:
+
+**Step 1 — Installs the AI engine**
+`llama-cpp-python` installs itself silently with pre-built wheels. No compiler or build tools needed on most machines.
+
+**Step 2 — Shows an interactive model picker**
+Choose a model based on your available RAM:
+
+```
+╭─────────────────────────────────────────────────────╮
+│ Choose a model based on your available RAM.         │
+│ The model downloads once and is reused every run.   │
+╰─────────────────────────────────────────────────────╯
+
+  [1]  CodeLlama 7B Instruct (Q4)
+       Size: ~4.0 GB   RAM: 8 GB+
+       Best quality — code errors, tracebacks, build failures
+
+  [2]  Mistral 7B Instruct (Q4)
+       Size: ~4.1 GB   RAM: 8 GB+
+       Great general errors, shell commands, config issues
+
+  [3]  Gemma 2B Instruct (Q4)
+       Size: ~1.6 GB   RAM: 4 GB+
+       Low RAM machines — fast, decent quality
+
+  [4]  Llama 3.2 3B Instruct (Q4)
+       Size: ~2.0 GB   RAM: 6 GB+
+       Good balance of speed and quality on mid-range machines
+
+  [5]  DeepSeek Coder 6.7B Instruct (Q4)
+       Size: ~3.8 GB   RAM: 8 GB+
+       Best for pure code debugging
+
+Enter model number [1-5]:
+```
+
+After the model downloads, every run is fully offline. No internet, no API key, no external server. Ever.
+
+> ⏳ **First explanation takes 30–60 seconds** while the model loads into RAM. Every run after that is faster as the OS caches the model.
+
+---
 
 ## Usage
 
 ```bash
 # Explain last terminal error (default)
-sherpa
+python -m sherpa
 
 # Explain a specific line in a file
-sherpa explain app.py:42
+python -m sherpa explain app.py:42
 
 # Ask a freeform question
-sherpa ask why is my API returning 403 only in production
+python -m sherpa ask why is my API returning 403 only in production
 
 # Show current config
-sherpa cfg show
+python -m sherpa cfg show
 
 # Switch to a different model
-sherpa cfg set-model /path/to/custom-model.gguf
+python -m sherpa cfg set-model /path/to/custom-model.gguf
 ```
+
+> **Windows tip:** If `sherpa` is not recognised as a command after install, always use `python -m sherpa`. This works identically on all platforms.
+
+---
 
 ## Why Sherpa?
 
@@ -86,66 +129,107 @@ That's a context switch. You leave your flow, lose your mental state, and waste 
 
 > 🔒 **Your code never leaves your machine.** Sherpa runs entirely locally using a quantized AI model. No data is sent anywhere. Ever.
 
+### Why not just use ChatGPT?
+
+| | Sherpa | ChatGPT / Copilot |
+|---|---|---|
+| Stays in terminal | ✅ | ❌ |
+| Works offline | ✅ | ❌ |
+| No API key | ✅ | ❌ |
+| Code never leaves machine | ✅ | ❌ |
+| Reads error automatically | ✅ | ❌ |
+| Free forever | ✅ | ❌ |
+
+---
+
 ## How It Works
 
 ```
-sherpa (you type this)
+python -m sherpa
   │
-  ├─ config.py    → checks if model exists
-  ├─ setup.py     → downloads model on first run
+  ├─ setup.py     → installs llama-cpp-python automatically (first run only)
+  ├─ setup.py     → interactive model picker + download (first run only)
+  ├─ config.py    → loads ~/.sherpa/config.json
   ├─ history.py   → reads last command + stderr from shell history
-  ├─ ai.py        → loads local model, runs inference
+  ├─ ai.py        → loads local GGUF model, runs inference
   └─ display.py   → prints explanation + fix with rich styling
 ```
 
-| Component | Library | Why |
+| Component | Library | Purpose |
 |---|---|---|
-| CLI | `click` | Clean command routing, auto help text |
+| CLI | `click` | Command routing, auto help text |
 | Output | `rich` | Colors, panels, syntax highlighting, progress bars |
-| AI | `llama-cpp-python` | Runs `.gguf` models inline, no server needed |
-| Model | CodeLlama 7B Q4 | Code-optimized, ~4GB, runs on CPU with 8GB RAM |
+| AI engine | `llama-cpp-python` | Runs `.gguf` models inline, no server needed |
 
-### Supported Models
+---
 
-| Model | Size | Best for |
-|---|---|---|
-| `codellama-7b-instruct.Q4_K_M.gguf` | 4GB | Default — code-specific, fast |
-| `deepseek-coder-6.7b.Q4_K_M.gguf` | 4GB | Slightly better on debug tasks |
-| `mistral-7b-instruct.Q4_K_M.gguf` | 4GB | Good general fallback |
-| `gemma-2b-it.Q4_K_M.gguf` | 1.6GB | Low RAM machines (4GB or less) |
-| `llama3.2-3b-instruct.Q4_K_M.gguf` | 2GB | Fast, decent quality, mid-range |
+## Supported Models
 
-Switch models anytime:
+Sherpa lets you pick your model on first run. You can switch anytime with `python -m sherpa cfg set-model`.
+
+| # | Model | Size | RAM | Best for |
+|---|---|---|---|---|
+| 1 | CodeLlama 7B Instruct Q4 | ~4.0 GB | 8 GB+ | Code errors, tracebacks, build failures |
+| 2 | Mistral 7B Instruct Q4 | ~4.1 GB | 8 GB+ | General errors, shell commands, config |
+| 3 | Gemma 2B Instruct Q4 | ~1.6 GB | 4 GB+ | Low RAM machines, fast responses |
+| 4 | Llama 3.2 3B Instruct Q4 | ~2.0 GB | 6 GB+ | Balanced speed and quality |
+| 5 | DeepSeek Coder 6.7B Q4 | ~3.8 GB | 8 GB+ | Pure code debugging |
+
+You can also use any custom `.gguf` model:
 
 ```bash
-sherpa cfg set-model /path/to/model.gguf
+python -m sherpa cfg set-model /path/to/your-model.gguf
 ```
 
-## Comparison
-
-| Tool | Leaves Terminal? | Explains Why? | Works Offline? | Needs API Key? |
-|---|---|---|---|---|
-| **Sherpa** | ❌ No | ✅ Yes | ✅ Yes | ❌ No |
-| Stack Overflow | ✅ Yes | Sometimes | ❌ No | — |
-| ChatGPT / Claude | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes |
-| GitHub Copilot | N/A (IDE) | ✅ Yes | ❌ No | ✅ Yes |
-| `thefuck` | ❌ No | ❌ No | ✅ Yes | ❌ No |
+---
 
 ## Supported Shells
 
-- ✅ Bash
-- ✅ Zsh
-- ✅ Fish
+| Shell | Platform | Status |
+|---|---|---|
+| PowerShell | Windows | ✅ |
+| Bash | Linux / macOS / WSL | ✅ |
+| Zsh | macOS / Linux | ✅ |
+| Fish | Linux / macOS | ✅ |
+
+---
 
 ## Requirements
 
 - Python 3.10+
-- 8GB RAM (for default 7B model)
-- ~4GB disk space for the model
+- 4 GB RAM minimum (8 GB recommended for 7B models)
+- Disk space for the model (1.6 GB – 4.1 GB depending on choice)
+- Internet connection only for the one-time model download
+
+---
+
+## Troubleshooting
+
+**`sherpa` command not found**
+Use `python -m sherpa` instead. This works identically on all platforms.
+
+**Blank screen / nothing happening after running**
+The model is loading into RAM — this takes 30–60 seconds on first run. You will see:
+```
+Loading model into memory (this takes 30-60 seconds on first run)...
+```
+Just wait. It will respond.
+
+**`llama-cpp-python` build error on Windows**
+Install [Visual Studio Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe) with "Desktop development with C++" checked, then run `python -m sherpa` again. The installer handles the rest automatically.
+
+**"Could not read shell history"**
+Run a command first (even a failing one), then run `python -m sherpa`. Sherpa reads from your live session history.
+
+---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for open tasks and guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for open tasks and contribution guidelines.
+
+Good first issues include adding `--brief` mode, pipe support (`cat error.log | python -m sherpa`), and a `sherpa watch` mode.
+
+---
 
 ## License
 
@@ -155,6 +239,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for open tasks and guidelines.
 
 <div align="center">
 
-*Built with Python and llama-cpp-python. Fully local. Your code never leaves your machine.*
+*Built with Python and llama-cpp-python · Fully local · Your code never leaves your machine*
+
+**[PyPI](https://pypi.org/project/sherpa-dev/) · [GitHub](https://github.com/RishiiGamer2201/sherpa) · [Contributing](CONTRIBUTING.md)**
 
 </div>
