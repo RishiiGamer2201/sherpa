@@ -9,6 +9,59 @@ import sys
 import subprocess
 from pathlib import Path
 
+# Commands shorter than this are almost certainly fragments — skip them
+_MIN_CMD_LENGTH = 4
+
+# Prefixes to always skip — these are never real errors to explain
+_SKIP_PREFIXES = (
+    "sherpa",
+    "python -m sherpa",
+    "python -c",
+    "deactivate",
+    "activate",
+    ".venv",
+    "& c:\\",
+    "& c:/",
+    "git ",
+    "cd ",
+    "ls",
+    "dir",
+    "clear",
+    "cls",
+    "echo",
+    "cat ",
+    "type ",
+    "get-",
+    "set-",
+    "test-path",
+    "write-host",
+    "select-",
+    "remove-",
+    "copy-",
+    "move-",
+    "#",       # shell comments — never a real command
+    ">>",      # PowerShell multiline continuation prompts
+    "& ",      # PowerShell call operator lines
+)
+
+
+def _is_valid_command(cmd: str) -> bool:
+    """Return True only if cmd looks like a real runnable command."""
+    cmd = cmd.strip()
+    if not cmd:
+        return False
+    # Too short — likely a fragment (a lone quote or bracket)
+    if len(cmd) < _MIN_CMD_LENGTH:
+        return False
+    # Contains only quotes/brackets/whitespace — definitely a fragment
+    if all(c in '"\'()[]{}' for c in cmd):
+        return False
+    lower = cmd.lower()
+    for prefix in _SKIP_PREFIXES:
+        if lower.startswith(prefix.lower()):
+            return False
+    return True
+
 
 def get_last_error() -> dict:
     """
@@ -29,14 +82,11 @@ def _detect_shell() -> str:
     On Windows, PSModulePath is always set inside a PowerShell session.
     On Unix, read the SHELL env variable.
     """
-    # Windows PowerShell / pwsh detection
-    # PSModulePath is injected by PowerShell itself — not present in cmd.exe
     if sys.platform == "win32":
         if os.environ.get("PSModulePath"):
             return "powershell"
-        return "cmd"   # fallback for cmd.exe
+        return "cmd"
 
-    # Unix
     shell_path = os.environ.get("SHELL", "")
     if "zsh"  in shell_path: return "zsh"
     if "fish" in shell_path: return "fish"
@@ -44,11 +94,11 @@ def _detect_shell() -> str:
 
 
 def _last_command(shell: str) -> str:
-    """Read the last non-sherpa command from shell history."""
+    """Read the last valid non-sherpa command from shell history."""
     if shell == "powershell":
         return _last_powershell_command()
     if shell == "cmd":
-        return ""   # cmd.exe has no accessible history file
+        return ""
 
     history_file = {
         "bash": Path.home() / ".bash_history",
@@ -61,25 +111,21 @@ def _last_command(shell: str) -> str:
 
     lines = history_file.read_text(errors="ignore").strip().splitlines()
 
-    # zsh prefixes lines with ": timestamp:0;" — strip it
     if shell == "zsh":
         lines = [
             l.split(";", 1)[-1] if l.startswith(":") else l
             for l in lines
         ]
 
-    # fish uses "- cmd:" format
     if shell == "fish":
         lines = [
             l.replace("- cmd:", "").strip()
             for l in lines if l.strip().startswith("- cmd:")
         ]
 
-    # walk backwards, skip blank lines and sherpa itself
     for line in reversed(lines):
-        line = line.strip()
-        if line and not line.startswith("sherpa"):
-            return line
+        if _is_valid_command(line):
+            return line.strip()
 
     return ""
 
@@ -87,17 +133,13 @@ def _last_command(shell: str) -> str:
 def _last_powershell_command() -> str:
     """
     Read live PowerShell session history using Get-History.
-    This works during the current session -- unlike the PSReadLine
-    history file, which is only flushed when the session ends.
     Falls back to the PSReadLine file if Get-History is unavailable.
     """
     try:
-        # Get-History returns commands in order, oldest first.
-        # We select the last 20 and walk backwards to skip sherpa calls.
         result = subprocess.run(
             [
                 "powershell", "-NoProfile", "-NonInteractive", "-Command",
-                "(Get-History | Select-Object -Last 20 | "
+                "(Get-History | Select-Object -Last 30 | "
                 "Select-Object -ExpandProperty CommandLine) -join '|||'"
             ],
             capture_output=True,
@@ -107,14 +149,13 @@ def _last_powershell_command() -> str:
         if result.returncode == 0 and result.stdout.strip():
             commands = result.stdout.strip().split("|||")
             for cmd in reversed(commands):
-                cmd = cmd.strip()
-                if cmd and not cmd.lower().startswith("sherpa"):
-                    return cmd
+                if _is_valid_command(cmd):
+                    return cmd.strip()
 
     except Exception:
-        pass  # fall through to file-based fallback
+        pass
 
-    # Fallback: PSReadLine history file (previous sessions only)
+    # Fallback: PSReadLine history file (previous sessions)
     ps_history = (
         Path.home()
         / "AppData"
@@ -128,9 +169,8 @@ def _last_powershell_command() -> str:
     if ps_history.exists():
         lines = ps_history.read_text(errors="ignore").strip().splitlines()
         for line in reversed(lines):
-            line = line.strip()
-            if line and not line.lower().startswith("sherpa"):
-                return line
+            if _is_valid_command(line):
+                return line.strip()
 
     return ""
 

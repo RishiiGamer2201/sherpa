@@ -13,7 +13,13 @@ def _get_model():
     """Load the model on first call, reuse on subsequent calls."""
     global _llm
     if _llm is None:
-        from llama_cpp import Llama  # lazy import — only needed at runtime
+        from llama_cpp import Llama
+        from rich.console import Console
+        console = Console()
+        console.print(
+            "[dim]Loading model into memory "
+            "(this takes 30-60 seconds on first run)...[/dim]"
+        )
         cfg = load()
         _llm = Llama(
             model_path=cfg["model_path"],
@@ -108,5 +114,5 @@ def _parse(raw: str) -> dict:
         elif line.upper().startswith("FIX:"):
             fix = line.split(":", 1)[-1].strip()
     if not reason:
-        reason = raw  # fallback — show raw output if parsing fails
+        reason = raw
     return {"reason": reason, "fix": fix}
