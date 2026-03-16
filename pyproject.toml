@@ -1,18 +1,17 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "sherpa-dev"
-version = "0.1.0"
+version = "0.1.1"
 description = "Explains your terminal errors in plain English. Fully local, no API key."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
 dependencies = [
     "click>=8.1",
     "rich>=13.0",
-    "llama-cpp-python>=0.2.0",
 ]
 
 [project.scripts]
@@ -23,3 +22,6 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["sherpa*"]

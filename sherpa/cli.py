@@ -4,7 +4,6 @@ Routes commands: default (explain last error), explain (specific line),
 ask (freeform question), and cfg (configuration management).
 """
 
-import sys
 import click
 from rich.console import Console
 
@@ -13,21 +12,10 @@ from sherpa import config, setup, history, ai, display
 console = Console()
 
 
-def _strip_windows_argv_bug():
-    """
-    On Windows editable installs, the .exe wrapper sometimes injects its own
-    path into sys.argv[1], causing click to treat it as a subcommand.
-    Strip it if detected.
-    """
-    if len(sys.argv) > 1 and sys.argv[1].endswith(".exe"):
-        sys.argv.pop(1)
-
-
 @click.group(invoke_without_command=True)
 @click.pass_context
 def main(ctx):
     """Sherpa — explains your terminal errors. Fully local, no API key."""
-    _strip_windows_argv_bug()
     if ctx.invoked_subcommand is None:
         _explain_last()
 
@@ -94,7 +82,11 @@ def cfg_set_model(path):
 
 
 def _ensure_model():
-    """Trigger download wizard if no model is found."""
+    """Trigger llama install + download wizard if needed."""
+    from sherpa.setup import ensure_llama
+    if not ensure_llama():
+        raise SystemExit(1)
+
     if not config.model_exists():
         setup.download_model()
         raise SystemExit(0)
